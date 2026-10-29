@@ -46,6 +46,19 @@ reutiliza el elemento existente (sin crearlo ni modificarlo) para conectarlo y p
 Así una vista cruza paquetes sin duplicar elementos. EA pinta además los conectores que ya existían
 entre esos elementos; para ver solo los del spec, `"diagram": { ..., "hideOtherConnectors": true }`.
 
+## Diagramas de clases
+
+- Atributo completo: `{ "name": "monto", "type": "Decimal", "stereotype": "PK|FK|unique", "lower": "0", "upper": "1", "default": "0", "notes": "…" }`.
+  Se actualizan si ya existen.
+- Asociación con multiplicidad y roles: `{ "from": "Linea", "to": "Asiento", "type": "Association", "fromCard": "0..*", "toCard": "1", "fromRole": "lineas", "toRole": "asiento" }`.
+  Dos asociaciones entre las mismas clases se distinguen por `toRole`.
+- Vistas que se referencian entre sí: la clase de otro paquete va como `ref` con `"optional": true` y
+  `"compact": true` (solo el nombre). Corre `build` de todas las vistas dos veces: la primera crea las
+  clases y la segunda las asociaciones que cruzan paquetes (`skippedConnectors` dice cuántas faltan).
+- **Desde Prisma**: `node ~/.ea-steroids/bin/prisma-a-spec.mjs <dominios.json> <carpeta>` genera un spec
+  por dominio (clases con sus campos, PK/FK/unique, enum, y cada relación con su multiplicidad); la
+  documentación de `dominios.json` está al inicio del script. Un modelo sin dominio es un error.
+
 ## Tipos útiles
 | Diagrama (`diagram.type`) | Elementos (`type`) | Conectores (`type`) |
 |---|---|---|

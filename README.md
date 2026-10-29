@@ -36,13 +36,20 @@ estas tareas (ea-cli responde `reachable: false` y la skill le indica pedirlo).
 | Ruta | Qué es |
 |---|---|
 | `bin/ea-cli.ps1` | Puente COM. Comandos: `status`, `open`, `tree`, `read`, `build`, `export`, `image`, `eval`. Salida JSON |
+| `bin/prisma-a-spec.mjs` | Genera specs de diagramas de clases desde un `schema.prisma` (Node): un diagrama por dominio, PK/FK, enum y multiplicidades |
 | `skills/ea-setup` | Primer arranque: EA instalado, 32/64 bits, abrir o crear un `.qea` |
 | `skills/ea-connect` | Conectar con el EA abierto y elegir el paquete de trabajo |
 | `skills/ea-model` | Crear vistas desde un spec JSON (`build`): elementos, conectores, diagrama, `ref` a otros paquetes, layout `auto` o `grid` |
 | `skills/ea-read` | Leer, auditar, documentar y exportar (XMI, PNG) |
+
+## Requisito extra
+
+`prisma-a-spec.mjs` necesita Node.js 18 o superior; el resto, solo PowerShell.
 
 ## Notas de la API de EA aprendidas
 
 - EA no escribe archivos en rutas largas (más de ~200 caracteres): `image` y `export` pasan por un temporal corto.
 - El auto-layout de EA vuelve a mostrar los enlaces ocultos: `hideOtherConnectors` los oculta antes y después.
 - EA de 32 bits solo registra su COM en WOW6432Node: ea-cli se relanza en PowerShell de 32 bits.
+- Las posiciones de un `DiagramObject` existente son enteros: un `double` de PowerShell falla con «conversión no válida».
+- Ocultar atributos en un diagrama: `DiagramObject.SetStyleEx('AttPub','0')` (y AttPri, AttPro, AttPkg, Op*).

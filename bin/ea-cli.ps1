@@ -67,7 +67,20 @@ function Get-Repo {
   return $repo
 }
 
-function Resolve-Package($repo, $ref) {
+function Resolve-Package($repo, $ref, [switch]$Soft) {
+  # -Soft: devuelve $null en vez de terminar cuando la ruta no existe.
+  if ($Soft) {
+    if ($ref -match '^\{[0-9A-Fa-f-]{36}\}$') { try { return $repo.GetPackageByGuid($ref) } catch { return $null } }
+    $parts = $ref -split '/'
+    $cur = $null
+    foreach ($m in $repo.Models) { if ($m.Name -eq $parts[0]) { $cur = $m; break } }
+    for ($i = 1; $cur -and $i -lt $parts.Count; $i++) {
+      $next = $null
+      foreach ($p in $cur.Packages) { if ($p.Name -eq $parts[$i]) { $next = $p; break } }
+      $cur = $next
+    }
+    return $cur
+  }
   if (-not $ref) {
     $sel = $null
     try { $sel = $repo.GetTreeSelectedPackage() } catch {}
@@ -187,14 +200,21 @@ switch ($Command) {
 
     # Elementos (idempotente por nombre dentro del paquete)
     $map = @{}
+    $omitidos = @{}
     foreach ($e in $s.elements) {
       $key = if ($e.id) { $e.id } else { $e.name }
       # "ref": elemento que ya vive en otro paquete; se reutiliza (conectores y diagrama), no se crea ni se modifica.
+      # Con "optional": true, si todavía no existe se omite junto con sus conectores (útil para construir
+      # varias vistas que se referencian entre sí: se corre build dos veces).
       if ($e.ref) {
-        $rp = Resolve-Package $repo $e.ref
         $found = $null
-        foreach ($x in $rp.Elements) { if ($x.Name -eq $e.name) { $found = $x; break } }
-        if (-not $found) { Fail "No existe '$($e.name)' en el paquete '$($e.ref)'." }
+        $rp = $null
+        $rp = if ($e.optional) { Resolve-Package $repo $e.ref -Soft } else { Resolve-Package $repo $e.ref }
+        if ($rp) { foreach ($x in $rp.Elements) { if ($x.Name -eq $e.name) { $found = $x; break } } }
+        if (-not $found) {
+          if ($e.optional) { $omitidos[$key] = $true; continue }
+          Fail "No existe '$($e.name)' en el paquete '$($e.ref)'."
+        }
         $map[$key] = $found
         continue
       }
@@ -206,11 +226,23 @@ switch ($Command) {
       if ($e.notes) { $el.Notes = $e.notes }
       if ($e.status) { $el.Status = $e.status }
       $el.Update() | Out-Null
+      # Atributos: "nombre" o { name, type, stereotype, notes, lower, upper, default }. Se actualizan si ya existen.
+      $pos = 0
       foreach ($a in @($e.attributes)) {
         if (-not $a) { continue }
         $an = if ($a -is [string]) { $a } else { $a.name }
-        $at = if ($a -is [string]) { '' } else { $a.type }
+        $at = if ($a -is [string]) { '' } else { [string]$a.type }
         $attr = Get-OrAdd $el.Attributes $an $at
+        if ($a -isnot [string]) {
+          $attr.Type = $at
+          if ($null -ne $a.stereotype) { $attr.Stereotype = [string]$a.stereotype }
+          if ($null -ne $a.notes) { $attr.Notes = [string]$a.notes }
+          if ($null -ne $a.lower) { $attr.LowerBound = [string]$a.lower }
+          if ($null -ne $a.upper) { $attr.UpperBound = [string]$a.upper }
+          if ($null -ne $a.default) { $attr.Default = [string]$a.default }
+        }
+        $attr.Pos = $pos; $pos++
+        $attr.Update() | Out-Null
       }
       foreach ($o in @($e.operations)) {
         if (-not $o) { continue }
@@ -225,20 +257,38 @@ switch ($Command) {
     # Conectores (no duplica si ya existe uno igual)
     $nConn = 0
     $specConn = @{}
+    $nOmit = 0
     foreach ($c in $s.connectors) {
+      if ($omitidos[$c.from] -or $omitidos[$c.to]) { $nOmit++; continue }
       $from = $map[$c.from]; $to = $map[$c.to]
       if (-not $from -or -not $to) { Fail "Conector '$($c.from)' -> '$($c.to)': elemento no definido en elements." }
       $ctype = if ($c.type) { $c.type } else { 'Association' }
-      $exists = $false
-      foreach ($x in $from.Connectors) { if ($x.SupplierID -eq $to.ElementID -and $x.Type -eq $ctype -and $x.Name -eq [string]$c.name) { $exists = $true; $specConn[$x.ConnectorID] = $true; break } }
-      if ($exists) { continue }
-      $con = $from.Connectors.AddNew([string]$c.name, $ctype)
-      $con.SupplierID = $to.ElementID
+      $toRole = [string]$c.toRole
+      # Mismo conector = mismo destino, tipo, nombre y rol del destino (dos asociaciones entre las mismas
+      # clases se distinguen por el rol).
+      $con = $null
+      foreach ($x in $from.Connectors) {
+        if ($x.ClientID -eq $from.ElementID -and $x.SupplierID -eq $to.ElementID -and $x.Type -eq $ctype -and $x.Name -eq [string]$c.name -and [string]$x.SupplierEnd.Role -eq $toRole) { $con = $x; break }
+      }
+      if (-not $con) {
+        $con = $from.Connectors.AddNew([string]$c.name, $ctype)
+        $con.SupplierID = $to.ElementID
+        $nConn++
+      }
       if ($c.stereotype) { $con.StereotypeEx = $c.stereotype }
+      if ($null -ne $c.notes) { $con.Notes = [string]$c.notes }
+      if ($c.direction) { $con.Direction = [string]$c.direction }
       $con.Update() | Out-Null
+      # Extremos: multiplicidad ("1", "0..1", "0..*", "1..*") y rol.
+      $ends = @(@($con.ClientEnd, $c.fromCard, $c.fromRole), @($con.SupplierEnd, $c.toCard, $c.toRole))
+      foreach ($en in $ends) {
+        $cambia = $false
+        if ($null -ne $en[1]) { $en[0].Cardinality = [string]$en[1]; $cambia = $true }
+        if ($null -ne $en[2]) { $en[0].Role = [string]$en[2]; $cambia = $true }
+        if ($cambia) { $en[0].Update() | Out-Null }
+      }
       $specConn[$con.ConnectorID] = $true
       $from.Connectors.Refresh()
-      $nConn++
     }
 
     # Diagrama
@@ -260,17 +310,24 @@ switch ($Command) {
       foreach ($e in $s.elements) {
         $key = if ($e.id) { $e.id } else { $e.name }
         $el = $map[$key]
+        if (-not $el) { continue }   # ref opcional que todavía no existe
         $col = if ($grid -and $null -ne $e.col) { [int]$e.col } else { $i % $cols }
         $row = if ($grid -and $null -ne $e.row) { [int]$e.row } else { [Math]::Floor($i / $cols) }
         $i++
-        $l = 40 + $col * ($w + $gx); $t = 40 + $row * ($h + $gy)
+        $l = [int](40 + $col * ($w + $gx)); $t = [int](40 + $row * ($h + $gy))
         $obj = $onDiagram[$el.ElementID]
         if ($obj) {
-          if (-not $grid) { continue }
-          $obj.Left = $l; $obj.Right = $l + $w; $obj.Top = - $t; $obj.Bottom = - ($t + $h)
+          if ($grid) { $obj.Left = $l; $obj.Right = $l + $w; $obj.Top = - $t; $obj.Bottom = - ($t + $h) }
+          elseif (-not $e.compact) { continue }
         } else {
           $obj = $diag.DiagramObjects.AddNew("l=$l;r=$($l + $w);t=-$t;b=-$($t + $h);", '')
           $obj.ElementID = $el.ElementID
+        }
+        # "compact": en este diagrama solo se ve el nombre (sin atributos ni operaciones); útil para
+        # las clases de otros paquetes, que ya se ven completas en su propia vista.
+        if ($e.compact) {
+          foreach ($k in 'AttPub', 'AttPri', 'AttPro', 'AttPkg', 'OpPub', 'OpPri', 'OpPro', 'OpPkg') { $obj.SetStyleEx($k, '0') }
+          $obj.Right = $obj.Left + 190; $obj.Bottom = $obj.Top - 60
         }
         $obj.Update() | Out-Null
       }
@@ -309,7 +366,7 @@ switch ($Command) {
       $diagInfo = [ordered]@{ id = $diag.DiagramID; name = $diag.Name; type = $diag.Type; objects = $diag.DiagramObjects.Count }
     }
     try { $repo.RefreshModelView($pkg.PackageID) } catch {}
-    Out-Json ([ordered]@{ ok = $true; package = (Get-PackagePath $repo $pkg); guid = $pkg.PackageGUID; elements = $map.Count; newConnectors = $nConn; diagram = $diagInfo })
+    Out-Json ([ordered]@{ ok = $true; package = (Get-PackagePath $repo $pkg); guid = $pkg.PackageGUID; elements = $map.Count; newConnectors = $nConn; skippedConnectors = $nOmit; skippedRefs = $omitidos.Count; diagram = $diagInfo })
   }
 
   'export' {
