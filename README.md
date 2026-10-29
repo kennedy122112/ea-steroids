@@ -36,7 +36,7 @@ estas tareas (ea-cli responde `reachable: false` y la skill le indica pedirlo).
 | Ruta | Qué es |
 |---|---|
 | `bin/ea-cli.ps1` | Puente COM. Comandos: `status`, `open`, `tree`, `read`, `build`, `export`, `image`, `eval`. Salida JSON |
-| `bin/prisma-a-spec.mjs` | Genera specs de diagramas de clases desde un `schema.prisma` (Node): un diagrama por dominio, PK/FK, enum y multiplicidades |
+| `bin/prisma_a_spec.py` | Genera specs de diagramas de clases desde un `schema.prisma` (Python, solo biblioteca estándar): un diagrama por dominio, PK/FK, enum y multiplicidades |
 | `skills/ea-setup` | Primer arranque: EA instalado, 32/64 bits, abrir o crear un `.qea` |
 | `skills/ea-connect` | Conectar con el EA abierto y elegir el paquete de trabajo |
 | `skills/ea-model` | Crear vistas desde un spec JSON (`build`): elementos, conectores, diagrama, `ref` a otros paquetes, layout `auto` o `grid` |
@@ -44,7 +44,7 @@ estas tareas (ea-cli responde `reachable: false` y la skill le indica pedirlo).
 
 ## Requisito extra
 
-`prisma-a-spec.mjs` necesita Node.js 18 o superior; el resto, solo PowerShell.
+`prisma_a_spec.py` necesita Python 3.8 o superior, sin paquetes extra; el resto, solo PowerShell.
 
 ## Notas de la API de EA aprendidas
 

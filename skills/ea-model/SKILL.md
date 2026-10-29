@@ -55,7 +55,7 @@ entre esos elementos; para ver solo los del spec, `"diagram": { ..., "hideOtherC
 - Vistas que se referencian entre sí: la clase de otro paquete va como `ref` con `"optional": true` y
   `"compact": true` (solo el nombre). Corre `build` de todas las vistas dos veces: la primera crea las
   clases y la segunda las asociaciones que cruzan paquetes (`skippedConnectors` dice cuántas faltan).
-- **Desde Prisma**: `node ~/.ea-steroids/bin/prisma-a-spec.mjs <dominios.json> <carpeta>` genera un spec
+- **Desde Prisma**: `python -I ~/.ea-steroids/bin/prisma_a_spec.py <dominios.json> <carpeta>` genera un spec
   por dominio (clases con sus campos, PK/FK/unique, enum, y cada relación con su multiplicidad); la
   documentación de `dominios.json` está al inicio del script. Un modelo sin dominio es un error.
 
