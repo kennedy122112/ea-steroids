@@ -39,6 +39,7 @@
 - 🧩 **Modela** diagramas de componentes, despliegue, clases, casos de uso o requisitos a partir de lo que describes.
 - 🔍 **Lee tu código** y lo lleva a EA: la arquitectura real de un repositorio o el modelo de datos de un `schema.prisma`, con sus multiplicidades.
 - 🧪 **Audita y documenta** un modelo que ya tienes: elementos huérfanos, sin notas, sin trazabilidad.
+- 🔀 **Lee procesos BPMN 2.0** de EA: pools, carriles, tareas, compuertas, eventos y flujos con sus tipos y condiciones, contados paso a paso.
 - 📤 **Exporta** paquetes a XMI y diagramas a PNG.
 
 Todo queda como modelo nativo de EA: lo puedes mover, editar y versionar como cualquier otro.
@@ -109,6 +110,7 @@ Verás aparecer el paquete y el diagrama en tu EA. El agente también lo exporta
 | *"modela en EA la arquitectura real de este repositorio"* | Vistas de despliegue, de componentes del frontend y del backend, sacadas de los módulos y dependencias reales del código |
 | *"genera los diagramas de clases desde el schema de Prisma"* | Un diagrama por dominio con cada tabla, sus campos y tipos, PK/FK y las relaciones con su multiplicidad |
 | *"agrega una vista de trazabilidad: qué módulo del frontend usa qué módulo del backend"* | Una vista que reutiliza los elementos de otras vistas, sin duplicarlos |
+| *"explícame el proceso BPMN del paquete Compras"* | El proceso paso a paso: quién hace cada tarea, qué decide cada compuerta y con qué condición, y qué se manda a otros participantes |
 | *"revisa mi paquete de requisitos en EA"* | Un informe con elementos sin trazabilidad, sin notas o huérfanos, sin modificar nada |
 | *"exporta el paquete Backend a XMI"* | El `.xmi` listo para importar en otra instancia de EA |
 | *"reacomoda el diagrama, que se cruzan las líneas"* | Posiciones por fila y columna, sin cajas tapadas |
@@ -144,6 +146,7 @@ No. Solo crea y actualiza. Si algo se quita del origen (por ejemplo, un campo de
 
 - Solo Windows (EA y COM).
 - Probado con diagramas de componentes, despliegue y clases, y con enumeraciones. Casos de uso, actividades, requisitos y ArchiMate usan la misma API, pero todavía no se han probado a fondo.
+- La lectura BPMN se probó con procesos hechos con el perfil BPMN 2.0 de EA 17.2 (pools, carriles, tareas, compuertas, eventos de inicio, fin e intermedios, flujos de secuencia y de mensaje). Crear BPMN todavía no está soportado: para eso usa [bizagi-steroids](https://github.com/kennedy122112/bizagi-steroids) e importa el `.bpmn` en EA.
 - No borra elementos: lo que ya no existe en el origen se quita a mano.
 - El layout automático de EA no siempre queda limpio en vistas grandes; el layout `grid` da control total.
 
@@ -190,7 +193,8 @@ Se usa también sin agente: `powershell -NoProfile -ExecutionPolicy Bypass -File
 | `status` | ¿EA abierto?, ¿qué modelo?, versión y bits |
 | `open -Path modelo.qea [-Create]` | Abre o crea un repositorio |
 | `tree [-Package ruta] [-Depth 3]` | Árbol de paquetes |
-| `read -Package ruta` | Elementos, conectores y diagramas de un paquete |
+| `read -Package ruta [-Tags]` | Elementos (también los anidados), conectores y diagramas de un paquete; `-Tags` suma los tagged values |
+| `bpmn -Package ruta` | Proceso BPMN: pools, carriles, nodos con su tipo, flujos con condiciones y el recorrido numerado |
 | `build -Spec vista.json` | Crea o actualiza paquete, elementos, conectores y diagrama (idempotente) |
 | `image -Package ruta [-Diagram nombre] -Path salida.png` | Exporta un diagrama |
 | `export -Package ruta -Path salida.xmi` | Exporta un paquete a XMI 2.1 |
@@ -223,6 +227,9 @@ Genera un spec por dominio desde un `schema.prisma`: clases con sus campos, PK/F
 - EA de 32 bits solo registra su COM en WOW6432Node: ea-cli se relanza en PowerShell de 32 bits.
 - Las posiciones de un `DiagramObject` existente son enteros: un `double` de PowerShell falla con «conversión no válida».
 - Para ocultar atributos en un diagrama: `DiagramObject.SetStyleEx('AttPub','0')` (y AttPri, AttPro, AttPkg, Op*).
+- `Package.Elements` solo trae el primer nivel: lo que va dentro de un pool, un carril o un componente está en `Element.Elements`.
+- En BPMN, EA guarda el tipo en tagged values: `taskType`, `gatewayType`, `eventDefinition`, `conditionExpression`. Los pools y carriles son `ActivityPartition` con estereotipo `Pool`/`Lane`.
+- PowerShell 5.1 lee un `.ps1` sin BOM como ANSI: `eval` lo carga como UTF-8 para no romper las tildes.
 
 ## 🔗 Proyectos hermanos
 

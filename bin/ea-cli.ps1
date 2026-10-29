@@ -6,7 +6,8 @@
     ea-cli.ps1 status                       # ¿EA abierto? ¿qué modelo?
     ea-cli.ps1 open   -Path <archivo.qea>   # abre (o crea con -Create) un repositorio
     ea-cli.ps1 tree   [-Package <guid|ruta>] [-Depth 3]
-    ea-cli.ps1 read   -Package <guid|ruta>  # elementos, conectores y diagramas en JSON
+    ea-cli.ps1 read   -Package <guid|ruta> [-Tags]  # elementos (también anidados), conectores y diagramas
+    ea-cli.ps1 bpmn   -Package <guid|ruta>  # proceso BPMN: pools, carriles, nodos, flujos y recorrido
     ea-cli.ps1 build  -Spec <spec.json>     # crea paquete + elementos + conectores + diagrama
     ea-cli.ps1 export -Package <guid|ruta> -Path <salida.xmi>
     ea-cli.ps1 image  -Package <guid|ruta> [-Diagram <nombre>] -Path <salida.png>
@@ -22,7 +23,8 @@ param(
   [string]$Script,
   [string]$Diagram,
   [int]$Depth = 3,
-  [switch]$Create
+  [switch]$Create,
+  [switch]$Tags
 )
 
 $ErrorActionPreference = 'Stop'
@@ -115,6 +117,27 @@ function Get-Tree($pkg, $d) {
   return $node
 }
 
+# Todos los elementos de un paquete, también los anidados (dentro de un pool, un carril, un
+# componente…), cada uno con su padre.
+function Get-ElementosAnidados($pkg) {
+  $lista = New-Object System.Collections.ArrayList
+  $cola = New-Object System.Collections.Queue
+  foreach ($e in $pkg.Elements) { $cola.Enqueue(@($e, $null)) }
+  while ($cola.Count) {
+    $par = $cola.Dequeue()
+    [void]$lista.Add([pscustomobject]@{ el = $par[0]; parent = $par[1] })
+    foreach ($h in $par[0].Elements) { $cola.Enqueue(@($h, $par[0])) }
+  }
+  return , $lista
+}
+
+# Tagged values con valor de un elemento o conector, como hashtable nombre → valor.
+function Get-Tags($obj) {
+  $t = [ordered]@{}
+  foreach ($x in $obj.TaggedValues) { if ([string]$x.Value -ne '') { $t[$x.Name] = [string]$x.Value } }
+  return $t
+}
+
 # Busca un hijo por nombre en una colección; si no existe lo crea (idempotente).
 function Get-OrAdd($collection, $name, $type) {
   foreach ($x in $collection) { if ($x.Name -eq $name) { return $x } }
@@ -172,18 +195,28 @@ switch ($Command) {
   }
 
   'read' {
+    # Recorre también los elementos anidados (lo que va dentro de un pool, un carril, un
+    # componente o un nodo), con "parent". -Tags suma los tagged values con valor.
     $repo = Get-Repo
     $pkg = Resolve-Package $repo $Package
+    $todos = Get-ElementosAnidados $pkg
     $byId = @{}
-    $elements = @(foreach ($e in $pkg.Elements) {
-      $byId[$e.ElementID] = $e.Name
-      [ordered]@{ id = $e.ElementID; guid = $e.ElementGUID; name = $e.Name; type = $e.Type; stereotype = $e.StereotypeEx; notes = $e.Notes; status = $e.Status; author = $e.Author }
+    foreach ($x in $todos) { $byId[$x.el.ElementID] = $x.el.Name }
+    $elements = @(foreach ($x in $todos) {
+      $e = $x.el
+      $o = [ordered]@{ id = $e.ElementID; guid = $e.ElementGUID; name = $e.Name; type = $e.Type; stereotype = $e.StereotypeEx; notes = $e.Notes; status = $e.Status; author = $e.Author }
+      if ($x.parent) { $o.parent = $x.parent.Name }
+      if ($Tags) { $o.tags = Get-Tags $e }
+      $o
     })
-    $connectors = @(foreach ($e in $pkg.Elements) {
+    $connectors = @(foreach ($x in $todos) {
+      $e = $x.el
       foreach ($c in $e.Connectors) {
         if ($c.ClientID -ne $e.ElementID) { continue }   # cada conector una sola vez
         $sup = $byId[$c.SupplierID]; if (-not $sup) { $sup = $repo.GetElementByID($c.SupplierID).Name }
-        [ordered]@{ from = $e.Name; to = $sup; type = $c.Type; name = $c.Name; stereotype = $c.Stereotype }
+        $o = [ordered]@{ from = $e.Name; to = $sup; type = $c.Type; name = $c.Name; stereotype = $c.StereotypeEx }
+        if ($Tags) { $o.tags = Get-Tags $c }
+        $o
       }
     })
     $diagrams = @(foreach ($d in $pkg.Diagrams) { [ordered]@{ id = $d.DiagramID; name = $d.Name; type = $d.Type; objects = $d.DiagramObjects.Count } })
@@ -397,11 +430,115 @@ switch ($Command) {
     Out-Json @{ ok = (Test-Path $full); path = $full; diagram = $diag.Name }
   }
 
+  'bpmn' {
+    # Lee un proceso BPMN 2.0 de EA como proceso: pools, carriles, nodos con su tipo BPMN,
+    # flujos con sus condiciones y el recorrido desde los eventos de inicio.
+    $repo = Get-Repo
+    $pkg = Resolve-Package $repo $Package
+    $todos = Get-ElementosAnidados $pkg
+    $porId = @{}
+    foreach ($x in $todos) { $porId[$x.el.ElementID] = $x }
+
+    # Pool y carril de cada elemento (subiendo por los padres)
+    function Ubicacion($x) {
+      $pool = $null; $lane = $null; $p = $x.parent
+      while ($p) {
+        $st = $p.Stereotype
+        if (-not $lane -and $st -eq 'Lane') { $lane = $p.Name }
+        if ($st -eq 'Pool') { $pool = $p.Name; break }
+        $p = if ($p.ParentID) { $repo.GetElementByID($p.ParentID) } else { $null }
+      }
+      @($pool, $lane)
+    }
+
+    $nodos = [ordered]@{}
+    $pools = [ordered]@{}
+    foreach ($x in $todos) {
+      $e = $x.el; $st = [string]$e.Stereotype; $tg = Get-Tags $e
+      if ($st -eq 'Pool') { if (-not $pools.Contains($e.Name)) { $pools[$e.Name] = @() }; continue }
+      if ($st -eq 'Lane') {
+        $u = Ubicacion $x
+        $pn = if ($u[0]) { $u[0] } else { '(sin pool)' }
+        if (-not $pools.Contains($pn)) { $pools[$pn] = @() }
+        $pools[$pn] += $e.Name
+        continue
+      }
+      $tipo = switch -Regex ($st) {
+        '^Activity$'        { if ($tg.activityType -and $tg.activityType -ne 'Task') { 'subproceso' } else { 'tarea' } }
+        'Event$'            { 'evento' }
+        '^Gateway$'         { 'compuerta' }
+        '^Data(Object|Store|Input|Output)$' { 'dato' }
+        '^(Group|TextAnnotation)$' { 'anotacion' }
+        default             { if ($st) { $st } else { $e.Type } }
+      }
+      $detalle = switch ($tipo) {
+        'tarea'      { $tg.taskType }
+        'subproceso' { $tg.activityType }
+        'compuerta'  { $tg.gatewayType }
+        'evento'     { $k = ($st -replace 'Event$', ''); if ($tg.eventDefinition -and $tg.eventDefinition -ne 'None') { "$k / $($tg.eventDefinition)" } else { $k } }
+        'dato'       { $st }
+        default      { $null }
+      }
+      $u = Ubicacion $x
+      $nodos[[string]$e.ElementID] = [ordered]@{ id = $e.ElementID; name = $e.Name; kind = $tipo; bpmnType = $detalle; pool = $u[0]; lane = $u[1]; notes = $e.Notes }
+    }
+
+    $flujos = @(); $mensajes = @(); $asociaciones = @()
+    $salidas = @{}
+    foreach ($x in $todos) {
+      $e = $x.el
+      foreach ($c in $e.Connectors) {
+        if ($c.ClientID -ne $e.ElementID) { continue }
+        $st = [string]$c.Stereotype; $tg = Get-Tags $c
+        $hacia = if ($porId[$c.SupplierID]) { $porId[$c.SupplierID].el.Name } else { $repo.GetElementByID($c.SupplierID).Name }
+        $f = [ordered]@{ from = $e.Name; to = $hacia; name = $c.Name }
+        if ($tg.conditionExpression) { $f.condition = $tg.conditionExpression }
+        if ($tg.isDefault -eq 'true') { $f.default = $true }
+        switch ($st) {
+          'SequenceFlow' { $flujos += $f; $k = [string]$e.ElementID; if (-not $salidas[$k]) { $salidas[$k] = @() }; $salidas[$k] += , @($c.SupplierID, $f) }
+          'MessageFlow'  { $mensajes += $f }
+          default        { $f.type = if ($st) { $st } else { $c.Type }; $asociaciones += $f }
+        }
+      }
+    }
+
+    # Recorrido en anchura desde los eventos de inicio: numera los pasos en el orden del proceso.
+    $orden = @{}; $cola = New-Object System.Collections.Queue; $n = 0
+    foreach ($k in $nodos.Keys) { if ($nodos[$k].kind -eq 'evento' -and $nodos[$k].bpmnType -like 'Start*') { $cola.Enqueue($k) } }
+    while ($cola.Count) {
+      $k = $cola.Dequeue()
+      if ($orden.ContainsKey($k)) { continue }
+      $n++; $orden[$k] = $n
+      foreach ($s in @($salidas[$k])) { if ($s) { $cola.Enqueue([string]$s[0]) } }
+    }
+    $pasos = @(foreach ($k in ($orden.Keys | Sort-Object { $orden[$_] })) {
+      $nd = $nodos[$k]
+      $sig = @(foreach ($s in @($salidas[$k])) {
+        if (-not $s) { continue }
+        $t = $nodos[[string]$s[0]]; $dest = if ($t) { "$($orden[[string]$s[0]]). $($t.name)" } else { [string]$s[1].to }
+        $et = @($s[1].name, $s[1].condition) | Where-Object { $_ }
+        if ($et) { "$dest [$($et -join ' | ')]" } else { $dest }
+      })
+      $o = [ordered]@{ step = $orden[$k]; name = $nd.name; kind = $nd.kind; bpmnType = $nd.bpmnType; lane = $nd.lane; next = $sig }
+      $o
+    })
+    $sinRecorrido = @(foreach ($k in $nodos.Keys) { if (-not $orden.ContainsKey($k) -and $nodos[$k].kind -notin 'dato', 'anotacion') { $nodos[$k].name } })
+
+    Out-Json ([ordered]@{
+      ok = $true; package = (Get-PackagePath $repo $pkg)
+      pools = @(foreach ($p in $pools.Keys) { [ordered]@{ name = $p; lanes = @($pools[$p]) } })
+      nodes = @($nodos.Values); sequenceFlows = $flujos; messageFlows = $mensajes; associations = $asociaciones
+      steps = $pasos; unreachable = $sinRecorrido
+    })
+  }
+
   'eval' {
     if (-not $Script) { Fail 'Falta -Script <archivo.ps1>.' }
     $repo = Get-Repo
-    . (Resolve-Path $Script)
+    # Se lee como UTF-8 (con o sin BOM): PowerShell 5.1 toma un .ps1 sin BOM como ANSI y
+    # rompe las tildes de los nombres que el script escribe en EA.
+    . ([scriptblock]::Create((Get-Content -Raw -Encoding UTF8 (Resolve-Path $Script))))
   }
 
-  default { Fail "Comando desconocido '$Command'. Usa: status, open, tree, read, build, export, image, eval." }
+  default { Fail "Comando desconocido '$Command'. Usa: status, open, tree, read, build, export, image, bpmn, eval." }
 }
