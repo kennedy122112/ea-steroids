@@ -1,0 +1,31 @@
+{
+  "parent": "Model",
+  "package": "Tienda en línea",
+  "elements": [
+    { "id": "cliente", "name": "Cliente", "type": "Actor" },
+    { "id": "web", "name": "Portal web", "type": "Component", "stereotype": "React", "notes": "Catálogo, carrito y pago" },
+    { "id": "api", "name": "API de pedidos", "type": "Component", "notes": "REST; valida stock y registra el pedido" },
+    { "id": "pagos", "name": "Pasarela de pagos", "type": "Component", "stereotype": "externo" },
+    { "id": "pedido", "name": "Pedido", "type": "Class",
+      "attributes": [
+        { "name": "id", "type": "String", "stereotype": "PK" },
+        { "name": "total", "type": "Decimal" },
+        { "name": "pagadoEn", "type": "DateTime", "lower": "0", "upper": "1" }
+      ],
+      "operations": [{ "name": "confirmar", "returnType": "void" }] },
+    { "id": "linea", "name": "LineaPedido", "type": "Class",
+      "attributes": [
+        { "name": "cantidad", "type": "Int" },
+        { "name": "precioUnitario", "type": "Decimal" }
+      ] }
+  ],
+  "connectors": [
+    { "from": "cliente", "to": "web", "type": "Association", "name": "usa" },
+    { "from": "web", "to": "api", "type": "Dependency", "name": "REST/JSON" },
+    { "from": "api", "to": "pagos", "type": "Dependency", "name": "cobra" },
+    { "from": "api", "to": "pedido", "type": "Dependency", "name": "registra" },
+    { "from": "linea", "to": "pedido", "type": "Association", "fromCard": "1..*", "toCard": "1", "fromRole": "lineas", "toRole": "pedido" }
+  ],
+  "diagram": { "name": "Tienda en línea", "type": "Component", "layout": "grid", "columns": 3 ,
+               "cellWidth": 170, "gapX": 90, "gapY": 100 }
+}

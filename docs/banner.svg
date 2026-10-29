@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="ea-steroids: de tu idea o tu código a Enterprise Architect">
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f2a4a"/>
+      <stop offset="1" stop-color="#1d4f86"/>
+    </linearGradient>
+    <linearGradient id="caja" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbe9e7"/>
+      <stop offset="1" stop-color="#f1c8c2"/>
+    </linearGradient>
+    <marker id="flecha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10" fill="none" stroke="#9fc3ea" stroke-width="1.6"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="320" rx="18" fill="url(#fondo)"/>
+
+  <text x="64" y="128" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="64" font-weight="700" fill="#ffffff">ea-steroids</text>
+  <text x="66" y="178" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="#cfe0f5">Tu agente de IA modela en Enterprise Architect</text>
+  <text x="66" y="212" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="#cfe0f5">desde lo que describes o desde tu código.</text>
+  <text x="66" y="262" font-family="Consolas, monospace" font-size="18" fill="#9fc3ea">local · sin MCP · sin API key · API COM de EA</text>
+
+  <!-- Mini diagrama -->
+  <g font-family="Segoe UI, Inter, Arial, sans-serif" font-size="15" text-anchor="middle">
+    <g stroke="#9fc3ea" stroke-width="1.6" fill="none" stroke-dasharray="6 5">
+      <line x1="860" y1="104" x2="860" y2="146" marker-end="url(#flecha)"/>
+      <line x1="842" y1="196" x2="770" y2="240" marker-end="url(#flecha)"/>
+      <line x1="878" y1="196" x2="950" y2="240" marker-end="url(#flecha)"/>
+    </g>
+    <rect x="790" y="54" width="140" height="50" rx="4" fill="url(#caja)" stroke="#b08c86"/>
+    <text x="860" y="76" font-size="12" fill="#6b4a45">«component»</text>
+    <text x="860" y="94" font-weight="600" fill="#3b2a28">Portal web</text>
+    <rect x="790" y="146" width="140" height="50" rx="4" fill="url(#caja)" stroke="#b08c86"/>
+    <text x="860" y="168" font-size="12" fill="#6b4a45">«component»</text>
+    <text x="860" y="186" font-weight="600" fill="#3b2a28">API</text>
+    <rect x="680" y="240" width="150" height="50" rx="4" fill="url(#caja)" stroke="#b08c86"/>
+    <text x="755" y="262" font-size="12" fill="#6b4a45">«class»</text>
+    <text x="755" y="280" font-weight="600" fill="#3b2a28">Pedido</text>
+    <rect x="890" y="240" width="150" height="50" rx="4" fill="url(#caja)" stroke="#b08c86"/>
+    <text x="965" y="262" font-size="12" fill="#6b4a45">«database»</text>
+    <text x="965" y="280" font-weight="600" fill="#3b2a28">PostgreSQL</text>
+  </g>
+</svg>

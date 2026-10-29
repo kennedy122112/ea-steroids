@@ -3,21 +3,48 @@
   Las skills viven una sola vez en ~/.ea-steroids/skills y cada agente las ve por un enlace
   (junction), así que editarlas o actualizarlas aquí las cambia en todos.
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\.ea-steroids\install.ps1"
-    ... -Uninstall   quita los enlaces (no borra ~/.ea-steroids)
+  Sin clonar nada (descarga ea-steroids en ~/.ea-steroids o lo actualiza):
+    irm https://raw.githubusercontent.com/kennedy122112/ea-steroids/main/install.ps1 | iex
+
+  Desde una copia del repositorio:
+    powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
+    ... -Uninstall   quita los enlaces (no borra los archivos)
 #>
 param([switch]$Uninstall)
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSCommandPath
 $h = $env:USERPROFILE
+$repo = 'https://github.com/kennedy122112/ea-steroids'
+
+# Ejecutado con "irm … | iex": no hay archivo, así que se trae el repositorio y se instala desde ahí.
+if (-not $PSCommandPath) {
+  $dest = "$h\.ea-steroids"
+  if (Test-Path "$dest\install.ps1") {
+    if (Test-Path "$dest\.git") { git -C $dest pull -q --ff-only }
+    else { Write-Host "Ya existe $dest (sin git): se reinstala tal como está." }
+  } elseif (Test-Path $dest) {
+    throw "$dest existe y no es ea-steroids: muévelo o bórralo antes de instalar."
+  } elseif (Get-Command git -ErrorAction SilentlyContinue) {
+    git clone -q "$repo.git" $dest
+  } else {
+    $zip = Join-Path $env:TEMP 'ea-steroids.zip'
+    Invoke-WebRequest "$repo/archive/refs/heads/main.zip" -OutFile $zip -UseBasicParsing
+    Expand-Archive $zip -DestinationPath $env:TEMP -Force
+    Move-Item (Join-Path $env:TEMP 'ea-steroids-main') $dest
+    Remove-Item $zip
+  }
+  & powershell -NoProfile -ExecutionPolicy Bypass -File "$dest\install.ps1"
+  return
+}
+
+$root = Split-Path -Parent $PSCommandPath
 
 # Carpeta de skills de cada agente. Solo se instala donde el agente ya existe.
 $destinos = [ordered]@{
-  'Claude Code'           = @{ base = "$h\.claude";              skills = "$h\.claude\skills" }
-  'Codex y otros (.agents)' = @{ base = "$h\.agents";            skills = "$h\.agents\skills" }
-  'OpenCode'              = @{ base = "$h\.config\opencode";     skills = "$h\.config\opencode\skills" }
-  'Antigravity'           = @{ base = "$h\.gemini\antigravity";  skills = "$h\.gemini\antigravity\skills" }
+  'Claude Code'             = @{ base = "$h\.claude";              skills = "$h\.claude\skills" }
+  'Codex y otros (.agents)' = @{ base = "$h\.agents";              skills = "$h\.agents\skills" }
+  'OpenCode'                = @{ base = "$h\.config\opencode";     skills = "$h\.config\opencode\skills" }
+  'Antigravity'             = @{ base = "$h\.gemini\antigravity";  skills = "$h\.gemini\antigravity\skills" }
 }
 
 # Las skills llaman al puente por ~/.ea-steroids: si el repositorio está en otra carpeta,
@@ -48,3 +75,4 @@ foreach ($agente in $destinos.Keys) {
   }
   "{0,-24} {1} ({2})" -f $agente, $(if ($Uninstall) { 'enlaces quitados' } else { "$($skills.Count) skills enlazadas" }), $d.skills
 }
+if (-not $Uninstall) { "ea-steroids instalado. Abre una sesión nueva en tu agente y pídele: «conecta con Enterprise Architect»." }
