@@ -1,0 +1,30 @@
+{
+  "parent": "Model",
+  "package": "Proceso de compra - Casos de uso",
+  "elements": [
+    { "id": "a_sol", "name": "Solicitante", "type": "Actor", "row": 0, "col": 0,
+      "notes": "Origen BPMN: carril «Solicitante» del pool «Empresa»." },
+    { "id": "a_jef", "name": "Jefe de área", "type": "Actor", "row": 2, "col": 0,
+      "notes": "Origen BPMN: carril «Jefe de área» del pool «Empresa»." },
+    { "id": "a_prov", "name": "Proveedor", "type": "Actor", "row": 1, "col": 3,
+      "notes": "Origen BPMN: pool externo «Proveedor» (caja negra). Recibe la orden por un flujo de mensaje." },
+    { "id": "uc1", "name": "Registrar solicitud de compra", "type": "UseCase", "row": 0, "col": 1,
+      "notes": "Origen BPMN: tarea de usuario «Registrar solicitud». La dispara el evento de inicio «Necesidad de compra»." },
+    { "id": "uc2", "name": "Revisar solicitud de compra", "type": "UseCase", "row": 2, "col": 1,
+      "notes": "Origen BPMN: tarea de usuario «Revisar solicitud» y la compuerta exclusiva «¿Aprobada?»: el jefe aprueba (aprobada == true) o rechaza (aprobada == false)." },
+    { "id": "uc3", "name": "Emitir orden de compra", "type": "UseCase", "row": 1, "col": 2,
+      "notes": "Origen BPMN: tarea de servicio «Emitir orden de compra» (la hace el sistema al aprobarse). Envía la orden al Proveedor y espera su confirmación 2 días (evento de temporizador)." },
+    { "id": "uc4", "name": "Notificar rechazo", "type": "UseCase", "row": 3, "col": 2,
+      "notes": "Origen BPMN: tarea de envío «Notificar rechazo» (la hace el sistema al rechazarse) en el carril «Solicitante»." }
+  ],
+  "connectors": [
+    { "from": "a_sol", "to": "uc1", "type": "Association" },
+    { "from": "a_jef", "to": "uc2", "type": "Association" },
+    { "from": "uc3", "to": "uc2", "type": "UseCase", "stereotype": "extend", "name": "[aprobada]" },
+    { "from": "uc4", "to": "uc2", "type": "UseCase", "stereotype": "extend", "name": "[rechazada]" },
+    { "from": "uc4", "to": "a_sol", "type": "Association", "name": "notifica" },
+    { "from": "uc3", "to": "a_prov", "type": "Association", "name": "envía la orden" }
+  ],
+  "diagram": { "name": "Sistema de compras - Casos de uso", "type": "Use Case", "layout": "grid",
+               "cellWidth": 180, "cellHeight": 70, "gapX": 110, "gapY": 60, "hideOtherConnectors": true }
+}

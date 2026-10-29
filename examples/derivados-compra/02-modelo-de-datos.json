@@ -1,0 +1,54 @@
+{
+  "parent": "Model",
+  "package": "Proceso de compra - Modelo de datos",
+  "elements": [
+    { "id": "sol", "name": "SolicitudCompra", "type": "Class", "row": 0, "col": 1,
+      "notes": "Origen BPMN: lo que registra «Registrar solicitud» y revisa «Revisar solicitud». Supuestos: descripcion y las fechas.",
+      "attributes": [
+        { "name": "id", "type": "String", "stereotype": "PK" },
+        { "name": "fecha", "type": "DateTime" },
+        { "name": "descripcion", "type": "String", "notes": "Supuesto" },
+        { "name": "estado", "type": "EstadoSolicitud" },
+        { "name": "aprobada", "type": "Boolean", "lower": "0", "notes": "De las condiciones de «¿Aprobada?»: aprobada == true / false" },
+        { "name": "fechaRevision", "type": "DateTime", "lower": "0", "notes": "Supuesto" }
+      ] },
+    { "id": "ord", "name": "OrdenCompra", "type": "Class", "row": 0, "col": 2,
+      "notes": "Origen BPMN: la emite «Emitir orden de compra» y viaja al Proveedor (flujo de mensaje «Orden de compra»).",
+      "attributes": [
+        { "name": "numero", "type": "String", "stereotype": "PK" },
+        { "name": "fechaEmision", "type": "DateTime" },
+        { "name": "fechaConfirmacion", "type": "DateTime", "lower": "0", "notes": "El proceso espera la confirmación 2 días (temporizador)" },
+        { "name": "estado", "type": "EstadoOrden" }
+      ] },
+    { "id": "emp", "name": "Empleado", "type": "Class", "row": 1, "col": 1,
+      "notes": "Origen BPMN: los carriles del pool «Empresa» son roles de empleados.",
+      "attributes": [
+        { "name": "id", "type": "String", "stereotype": "PK" },
+        { "name": "nombre", "type": "String", "notes": "Supuesto" },
+        { "name": "rol", "type": "Rol" }
+      ] },
+    { "id": "prov", "name": "Proveedor", "type": "Class", "row": 1, "col": 2,
+      "notes": "Origen BPMN: pool externo «Proveedor». Supuesto: sus atributos.",
+      "attributes": [
+        { "name": "id", "type": "String", "stereotype": "PK" },
+        { "name": "razonSocial", "type": "String", "notes": "Supuesto" }
+      ] },
+    { "id": "est", "name": "EstadoSolicitud", "type": "Enumeration", "row": 0, "col": 0,
+      "notes": "Del recorrido del proceso: registro, revisión y las dos salidas de «¿Aprobada?».",
+      "attributes": ["REGISTRADA", "EN_REVISION", "APROBADA", "RECHAZADA"] },
+    { "id": "eor", "name": "EstadoOrden", "type": "Enumeration", "row": 0, "col": 3,
+      "notes": "Emitida al aprobarse; confirmada cuando responde el Proveedor (o vence el plazo de 2 días).",
+      "attributes": ["EMITIDA", "CONFIRMADA"] },
+    { "id": "rol", "name": "Rol", "type": "Enumeration", "row": 1, "col": 0,
+      "notes": "De los carriles del pool «Empresa».",
+      "attributes": ["SOLICITANTE", "JEFE_DE_AREA"] }
+  ],
+  "connectors": [
+    { "from": "sol", "to": "emp", "type": "Association", "fromCard": "0..*", "toCard": "1", "fromRole": "solicitudes", "toRole": "solicitante" },
+    { "from": "sol", "to": "emp", "type": "Association", "fromCard": "0..*", "toCard": "0..1", "fromRole": "revisadas", "toRole": "revisadaPor" },
+    { "from": "ord", "to": "sol", "type": "Association", "fromCard": "0..1", "toCard": "1", "fromRole": "orden", "toRole": "solicitud" },
+    { "from": "ord", "to": "prov", "type": "Association", "fromCard": "0..*", "toCard": "1", "fromRole": "ordenes", "toRole": "proveedor" }
+  ],
+  "diagram": { "name": "Proceso de compra - Modelo de datos", "type": "Logical", "layout": "grid",
+               "cellWidth": 210, "cellHeight": 150, "gapX": 90, "gapY": 80, "hideOtherConnectors": true }
+}

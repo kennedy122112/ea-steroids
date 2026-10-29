@@ -7,7 +7,7 @@
     ea-cli.ps1 open   -Path <archivo.qea>   # abre (o crea con -Create) un repositorio
     ea-cli.ps1 tree   [-Package <guid|ruta>] [-Depth 3]
     ea-cli.ps1 read   -Package <guid|ruta> [-Tags]  # elementos (también anidados), conectores y diagramas
-    ea-cli.ps1 bpmn   -Package <guid|ruta>  # proceso BPMN: pools, carriles, nodos, flujos y recorrido
+    ea-cli.ps1 bpmn   -Package <guid|ruta> [-Path <doc.md>]  # proceso BPMN: pools, carriles, nodos, flujos y recorrido
     ea-cli.ps1 build  -Spec <spec.json>     # crea paquete + elementos + conectores + diagrama
     ea-cli.ps1 export -Package <guid|ruta> -Path <salida.xmi>
     ea-cli.ps1 image  -Package <guid|ruta> [-Diagram <nombre>] -Path <salida.png>
@@ -243,7 +243,8 @@ switch ($Command) {
         $found = $null
         $rp = $null
         $rp = if ($e.optional) { Resolve-Package $repo $e.ref -Soft } else { Resolve-Package $repo $e.ref }
-        if ($rp) { foreach ($x in $rp.Elements) { if ($x.Name -eq $e.name) { $found = $x; break } } }
+        # Busca también entre los anidados (una tarea dentro de un carril, una clase dentro de un componente).
+        if ($rp) { foreach ($x in (Get-ElementosAnidados $rp)) { if ($x.el.Name -eq $e.name) { $found = $x.el; break } } }
         if (-not $found) {
           if ($e.optional) { $omitidos[$key] = $true; continue }
           Fail "No existe '$($e.name)' en el paquete '$($e.ref)'."
@@ -394,6 +395,33 @@ switch ($Command) {
         try { $repo.GetProjectInterface().LayoutDiagramEx($diag.DiagramGUID, 0x40010004, 4, 40, 40, $false) | Out-Null } catch {}
         if ($s.diagram.hideOtherConnectors) { & $ocultarOtros }
       }
+      # Varios conectores entre las mismas dos cajas se dibujan uno encima de otro: se separan
+      # desplazando sus extremos en paralelo (90 px entre cada uno, para que no se pisen los roles).
+      $centro = @{}
+      foreach ($o in $diag.DiagramObjects) { $centro[$o.ElementID] = @((($o.Left + $o.Right) / 2), (($o.Top + $o.Bottom) / 2)) }
+      $pares = @{}
+      foreach ($cid in $specConn.Keys) {
+        $cx = $repo.GetConnectorByID($cid)
+        if (-not ($centro[$cx.ClientID] -and $centro[$cx.SupplierID]) -or $cx.ClientID -eq $cx.SupplierID) { continue }
+        $k = @($cx.ClientID, $cx.SupplierID) | Sort-Object
+        $k = "$($k[0])-$($k[1])"
+        if (-not $pares[$k]) { $pares[$k] = @() }
+        $pares[$k] += $cx
+      }
+      $enlaces = @{}; foreach ($lk in $diag.DiagramLinks) { $enlaces[$lk.ConnectorID] = $lk }
+      foreach ($grupo in $pares.Values) {
+        if ($grupo.Count -lt 2) { continue }
+        $a = $centro[$grupo[0].ClientID]; $b = $centro[$grupo[0].SupplierID]
+        $vertical = [Math]::Abs($a[0] - $b[0]) -lt [Math]::Abs($a[1] - $b[1])
+        for ($j = 0; $j -lt $grupo.Count; $j++) {
+          $off = [int](($j - ($grupo.Count - 1) / 2) * 90)
+          $lk = $enlaces[$grupo[$j].ConnectorID]
+          if (-not $lk) { $lk = $diag.DiagramLinks.AddNew('', ''); $lk.ConnectorID = $grupo[$j].ConnectorID }
+          $lk.Geometry = if ($vertical) { "SX=$off;SY=0;EX=$off;EY=0;" } else { "SX=0;SY=$off;EX=0;EY=$off;" }
+          $lk.Path = ''
+          $lk.Update() | Out-Null
+        }
+      }
       $repo.ReloadDiagram($diag.DiagramID)
       if ($s.diagram.open -ne $false) { try { $repo.OpenDiagram($diag.DiagramID) } catch {} }
       $diagInfo = [ordered]@{ id = $diag.DiagramID; name = $diag.Name; type = $diag.Type; objects = $diag.DiagramObjects.Count }
@@ -517,15 +545,124 @@ switch ($Command) {
         if (-not $s) { continue }
         $t = $nodos[[string]$s[0]]; $dest = if ($t) { "$($orden[[string]$s[0]]). $($t.name)" } else { [string]$s[1].to }
         $et = @($s[1].name, $s[1].condition) | Where-Object { $_ }
-        if ($et) { "$dest [$($et -join ' | ')]" } else { $dest }
+        if ($et) { "$dest [$($et -join ': ')]" } else { $dest }
       })
       $o = [ordered]@{ step = $orden[$k]; name = $nd.name; kind = $nd.kind; bpmnType = $nd.bpmnType; lane = $nd.lane; next = $sig }
       $o
     })
     $sinRecorrido = @(foreach ($k in $nodos.Keys) { if (-not $orden.ContainsKey($k) -and $nodos[$k].kind -notin 'dato', 'anotacion') { $nodos[$k].name } })
 
+    # -Path <archivo.md>: el proceso como documento (tablas + diagrama Mermaid).
+    $doc = $null
+    if ($Path) {
+      $tipoTexto = {
+        param($nd)
+        $defs = @{ Timer = 'temporizador'; Message = 'mensaje'; Signal = 'señal'; Error = 'error'; Escalation = 'escalamiento'; Conditional = 'condicional'; Terminate = 'terminación'; Compensation = 'compensación'; Link = 'enlace'; Cancel = 'cancelación' }
+        switch ($nd.kind) {
+          'tarea' {
+            $t = @{ User = 'de usuario'; Service = 'de servicio'; Send = 'de envío'; Receive = 'de recepción'; Manual = 'manual'; Script = 'de script'; BusinessRule = 'de regla de negocio' }[[string]$nd.bpmnType]
+            if ($t) { "Tarea $t" } else { 'Tarea' }
+          }
+          'subproceso' { 'Subproceso' }
+          'compuerta' {
+            $g = @{ Exclusive = 'exclusiva'; Parallel = 'paralela'; Inclusive = 'inclusiva'; EventBased = 'basada en eventos'; Complex = 'compleja' }[[string]$nd.bpmnType]
+            if ($g) { "Compuerta $g" } else { 'Compuerta' }
+          }
+          'evento' {
+            $p = ([string]$nd.bpmnType) -split ' / '
+            $base = @{ Start = 'Inicio'; End = 'Fin'; Intermediate = 'Evento intermedio' }[$p[0]]
+            if (-not $base) { $base = 'Evento' }
+            if ($p.Count -gt 1 -and $defs[$p[1]]) { "$base ($($defs[$p[1]]))" } else { $base }
+          }
+          default { [string]$nd.kind }
+        }
+      }
+      $porNombre = @{}; foreach ($nd in $nodos.Values) { $porNombre[$nd.name] = $nd }
+      # Orden del proceso: carriles y nodos según el primer paso en que aparecen.
+      $pasoDe = @{}; foreach ($s in $pasos) { $pasoDe[$s.name] = $s.step }
+      $ordenNodo = { param($nd) if ($pasoDe.ContainsKey($nd.name)) { $pasoDe[$nd.name] } else { 9999 } }
+      $primerPaso = @{}
+      foreach ($nd in $nodos.Values) {
+        $v = & $ordenNodo $nd
+        foreach ($k in @($nd.lane, $nd.pool)) { if ($k -and (-not $primerPaso.ContainsKey($k) -or $v -lt $primerPaso[$k])) { $primerPaso[$k] = $v } }
+      }
+      $ordenGrupo = { param($k) if ($primerPaso.ContainsKey($k)) { $primerPaso[$k] } else { 9999 } }
+      $celda = { param($s) ([string]$s) -replace '\|', '\|' }
+      $md = New-Object System.Collections.Generic.List[string]
+      $md.Add("# $($pkg.Name)"); $md.Add('')
+      $md.Add("Proceso BPMN leído de Enterprise Architect (paquete ``$(Get-PackagePath $repo $pkg)``) con ea-steroids."); $md.Add('')
+      $md.Add('## Participantes'); $md.Add('')
+      $md.Add('| Participante (pool) | Responsables (carriles) |'); $md.Add('|---|---|')
+      foreach ($p in @($pools.Keys | Sort-Object { & $ordenGrupo $_ })) {
+        $l = @($pools[$p] | Sort-Object { & $ordenGrupo $_ })
+        $md.Add("| $(& $celda $p) | $(if ($l.Count) { ($l | ForEach-Object { & $celda $_ }) -join ', ' } else { '— (externo)' }) |")
+      }
+      $md.Add(''); $md.Add('## Recorrido'); $md.Add('')
+      $md.Add('| N° | Responsable | Paso | Tipo | Sigue |'); $md.Add('|---|---|---|---|---|')
+      foreach ($s in $pasos) {
+        $nd = $porNombre[$s.name]
+        $sig = if ($s.next.Count) { (($s.next | ForEach-Object { & $celda $_ }) -join '<br>') } else { '—' }
+        $md.Add("| $($s.step) | $(& $celda $s.lane) | $(& $celda $s.name) | $(& $tipoTexto $nd) | $sig |")
+      }
+      $gws = @($pasos | Where-Object { $_.kind -eq 'compuerta' })
+      if ($gws.Count) {
+        $md.Add(''); $md.Add('## Decisiones'); $md.Add('')
+        foreach ($g in $gws) {
+          $md.Add("**$($g.step). $($g.name)** ($(& $tipoTexto $porNombre[$g.name]))"); $md.Add('')
+          foreach ($f in @($flujos | Where-Object { $_.from -eq $g.name })) {
+            $et = if ($f.name) { $f.name } else { '(sin nombre)' }
+            $cond = if ($f.condition) { " — condición: ``$($f.condition)``" } else { '' }
+            $md.Add("- **$et** → $($f.to)$cond")
+          }
+          $md.Add('')
+        }
+      }
+      if ($mensajes.Count) {
+        $md.Add('## Mensajes con otros participantes'); $md.Add('')
+        foreach ($m in $mensajes) { $md.Add("- $($m.from) → **$($m.to)**$(if ($m.name) { ": $($m.name)" })") }
+        $md.Add('')
+      }
+      if ($sinRecorrido.Count) {
+        $md.Add('## Sin recorrido'); $md.Add('')
+        $md.Add('Ningún evento de inicio llega a: ' + ($sinRecorrido -join ', ') + '.'); $md.Add('')
+      }
+      # Diagrama Mermaid: un subgrafo por carril (o pool sin carriles), formas según el tipo.
+      $md.Add('## Diagrama'); $md.Add(''); $md.Add('```mermaid'); $md.Add('flowchart LR')
+      $q = { param($s) ([string]$s) -replace '"', '#quot;' }
+      $forma = {
+        param($nd)
+        $t = & $q $nd.name
+        switch ($nd.kind) { 'evento' { "n$($nd.id)((""$t""))" } 'compuerta' { "n$($nd.id){""$t""}" } default { "n$($nd.id)[""$t""]" } }
+      }
+      $grupos = [ordered]@{}
+      foreach ($nd in @($nodos.Values | Sort-Object { & $ordenNodo $_ })) {
+        if ($nd.kind -in 'dato', 'anotacion') { continue }
+        $g = if ($nd.lane) { $nd.lane } elseif ($nd.pool) { $nd.pool } else { '' }
+        if (-not $grupos.Contains($g)) { $grupos[$g] = @() }
+        $grupos[$g] += $nd
+      }
+      $i = 0
+      foreach ($g in $grupos.Keys) {
+        $i++
+        if ($g) { $md.Add("    subgraph g$i[""$(& $q $g)""]") }
+        foreach ($nd in $grupos[$g]) { $md.Add("        " + (& $forma $nd)) }
+        if ($g) { $md.Add('    end') }
+      }
+      foreach ($p in $pools.Keys) { if (-not @($pools[$p]).Count -and -not ($nodos.Values | Where-Object { $_.pool -eq $p })) { $md.Add("    p_$i[[""$(& $q $p)""]]"); $porNombre[$p] = @{ id = "p_$i"; ext = $true }; $i++ } }
+      $idDe = { param($nombre) $x = $porNombre[$nombre]; if ($x.ext) { $x.id } else { "n$($x.id)" } }
+      foreach ($f in @($flujos | Sort-Object { $pasoDe[$_.from] })) {
+        $et = @($f.name, $f.condition) | Where-Object { $_ }
+        $lab = if ($et) { "|""$(& $q ($et -join ': '))""|" } else { '' }
+        $md.Add("    $(& $idDe $f.from) -->$lab $(& $idDe $f.to)")
+      }
+      foreach ($m in $mensajes) { $lab = if ($m.name) { "|""$(& $q $m.name)""|" } else { '' }; $md.Add("    $(& $idDe $m.from) -.->$lab $(& $idDe $m.to)") }
+      $md.Add('```'); $md.Add('')
+      $doc = [System.IO.Path]::GetFullPath($Path)
+      [System.IO.File]::WriteAllText($doc, ($md -join "`n"), (New-Object System.Text.UTF8Encoding $false))
+    }
+
     Out-Json ([ordered]@{
-      ok = $true; package = (Get-PackagePath $repo $pkg)
+      ok = $true; package = (Get-PackagePath $repo $pkg); document = $doc
       pools = @(foreach ($p in $pools.Keys) { [ordered]@{ name = $p; lanes = @($pools[$p]) } })
       nodes = @($nodos.Values); sequenceFlows = $flujos; messageFlows = $mensajes; associations = $asociaciones
       steps = $pasos; unreachable = $sinRecorrido

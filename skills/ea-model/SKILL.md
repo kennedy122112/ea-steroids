@@ -59,6 +59,35 @@ entre esos elementos; para ver solo los del spec, `"diagram": { ..., "hideOtherC
   por dominio (clases con sus campos, PK/FK/unique, enum, y cada relación con su multiplicidad); la
   documentación de `dominios.json` está al inicio del script. Un modelo sin dominio es un error.
 
+## Derivar vistas desde un proceso BPMN
+
+Cuando el usuario pida casos de uso, modelo de datos u otras vistas "a partir del BPMN" (o "del
+proceso"), lee primero el proceso con `ea-cli bpmn -Package <ruta>` y arma cada vista con `build`:
+
+| Del BPMN | Pasa a |
+|---|---|
+| Carril (lane) | **Actor** (un rol de la organización) |
+| Pool externo / caja negra | **Actor** externo (otro sistema u organización) |
+| Tarea de usuario o manual | **Caso de uso** del actor de su carril (nómbralo con verbo + objeto: «Registrar solicitud de compra») |
+| Tarea de servicio, de envío o de script | Caso de uso **del sistema**: va como «extend» (si depende de una decisión, con la condición entre corchetes) o «include» del caso de uso que lo dispara |
+| Compuerta | Parte del caso de uso de la tarea que decide; sus salidas son los «extend» con su condición |
+| Flujo de mensaje | Asociación del caso de uso con el actor externo |
+| Lo que se registra, revisa o envía (solicitud, orden…) | **Clase** del modelo de datos; sus estados salen del recorrido (enumeración) |
+| Variables de las condiciones (`aprobada == true`) | **Atributos** de esa clase |
+| Carriles | Roles: enumeración y una clase de persona (Empleado, Usuario…) |
+| Temporizadores | Atributos de fecha o plazo (y notas en el caso de uso) |
+
+Reglas:
+- En las **notas** de cada elemento derivado escribe su origen («Origen BPMN: tarea de usuario
+  «Registrar solicitud»») y marca como **Supuesto** todo lo que el BPMN no dice (atributos de
+  negocio, tipos de dato, cardinalidades dudosas). Cuéntale al usuario cuáles son los supuestos.
+- Crea además una vista de **trazabilidad**: cada caso de uso y cada clase con un `Dependency`
+  estereotipo `trace` hacia su tarea o compuerta de origen (los elementos del BPMN entran como
+  `ref`; `ref` encuentra también los que están dentro de carriles).
+- Usa `layout: "grid"` y `hideOtherConnectors: true` en las tres vistas.
+- Ejemplo completo: `examples/derivados-compra/` (casos de uso, modelo de datos y trazabilidad
+  derivados del proceso de compra).
+
 ## Tipos útiles
 | Diagrama (`diagram.type`) | Elementos (`type`) | Conectores (`type`) |
 |---|---|---|

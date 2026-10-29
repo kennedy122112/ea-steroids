@@ -42,6 +42,7 @@
 - 🔍 **Reads your code** and brings it into EA: the real architecture of a repository, or the data model of a `schema.prisma` with its multiplicities.
 - 🧪 **Audits and documents** a model you already have: orphan elements, missing notes, missing traceability.
 - 🔀 **Reads BPMN 2.0 processes** in EA: pools, lanes, tasks, gateways, events and flows with their types and conditions, told step by step.
+- 🧬 **Derives views from a BPMN**: use cases (actors from lanes), data model (entities and states from what the process handles) and traceability back to each task, marking as an assumption whatever the BPMN doesn't say.
 - 📤 **Exports** packages to XMI and diagrams to PNG.
 
 Everything ends up as a native EA model: move it, edit it and version it like any other.
@@ -112,7 +113,8 @@ The package and the diagram appear in your EA. The agent also exports it to PNG 
 | *"model the real architecture of this repository in EA"* | Deployment, frontend and backend component views, built from the real modules and dependencies in the code |
 | *"generate the class diagrams from the Prisma schema"* | One diagram per domain with every table, its fields and types, PK/FK, and relationships with multiplicity |
 | *"add a traceability view: which frontend module uses which backend module"* | A view that reuses elements from other views without duplicating them |
-| *"explain the BPMN process in the Purchasing package"* | The process step by step: who does each task, what each gateway decides and on which condition, and what is sent to other participants |
+| *"explain the BPMN process in the Purchasing package"* | The process step by step: who does each task, what each gateway decides and on which condition, and what is sent to other participants. On request, also as a document: [example](examples/proceso-compra-bpmn.md) |
+| *"from the purchasing BPMN, derive the use cases and the data model"* | A use case diagram (with «extend» and its conditions), a class diagram with states and roles, and a traceability view back to the BPMN tasks ([example](examples/derivados-compra/)) |
 | *"review my requirements package in EA"* | A report of elements without traceability, without notes or orphaned, without changing anything |
 | *"export the Backend package to XMI"* | The `.xmi`, ready to import into another EA instance |
 | *"tidy up the diagram, the lines cross"* | Row and column positions, with no hidden boxes |
@@ -196,7 +198,7 @@ Also usable without an agent: `powershell -NoProfile -ExecutionPolicy Bypass -Fi
 | `open -Path model.qea [-Create]` | Opens or creates a repository |
 | `tree [-Package path] [-Depth 3]` | Package tree |
 | `read -Package path [-Tags]` | Elements (nested ones too), connectors and diagrams of a package; `-Tags` adds tagged values |
-| `bpmn -Package path` | BPMN process: pools, lanes, typed nodes, flows with conditions and the numbered walk-through |
+| `bpmn -Package path [-Path doc.md]` | BPMN process: pools, lanes, typed nodes, flows with conditions and the numbered walk-through; with `-Path`, also as a Markdown document with a Mermaid diagram ([example](examples/proceso-compra-bpmn.md), in Spanish) |
 | `build -Spec view.json` | Creates or updates package, elements, connectors and diagram (idempotent) |
 | `image -Package path [-Diagram name] -Path out.png` | Exports a diagram |
 | `export -Package path -Path out.xmi` | Exports a package to XMI 2.1 |
@@ -229,6 +231,7 @@ Generates one spec per domain from a `schema.prisma`: classes with their fields,
 - 32-bit EA only registers its COM server under WOW6432Node: ea-cli relaunches itself in 32-bit PowerShell.
 - Positions of an existing `DiagramObject` are integers: a PowerShell `double` fails with "specified cast is not valid".
 - To hide attributes on a diagram: `DiagramObject.SetStyleEx('AttPub','0')` (and AttPri, AttPro, AttPkg, Op*).
+- Two connectors between the same boxes are drawn on top of each other: `build` separates them through `DiagramLink.Geometry` (`SX`/`EX` or `SY`/`EY`).
 - `Package.Elements` only returns the first level: whatever sits inside a pool, lane or component lives in `Element.Elements`.
 - For BPMN, EA stores the type in tagged values: `taskType`, `gatewayType`, `eventDefinition`, `conditionExpression`. Pools and lanes are `ActivityPartition` with stereotype `Pool`/`Lane`.
 - PowerShell 5.1 reads a BOM-less `.ps1` as ANSI: `eval` loads it as UTF-8 so accents aren't broken.

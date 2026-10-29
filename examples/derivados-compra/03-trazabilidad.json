@@ -1,0 +1,31 @@
+{
+  "parent": "Model",
+  "package": "Proceso de compra - Trazabilidad",
+  "elements": [
+    { "id": "uc1", "ref": "Model/Proceso de compra - Casos de uso", "name": "Registrar solicitud de compra", "row": 0, "col": 0 },
+    { "id": "uc2", "ref": "Model/Proceso de compra - Casos de uso", "name": "Revisar solicitud de compra", "row": 0, "col": 1 },
+    { "id": "uc3", "ref": "Model/Proceso de compra - Casos de uso", "name": "Emitir orden de compra", "row": 0, "col": 2 },
+    { "id": "uc4", "ref": "Model/Proceso de compra - Casos de uso", "name": "Notificar rechazo", "row": 0, "col": 3 },
+
+    { "id": "t1", "ref": "Model/Proceso de compra", "name": "Registrar solicitud", "row": 1, "col": 0 },
+    { "id": "t2", "ref": "Model/Proceso de compra", "name": "Revisar solicitud", "row": 1, "col": 1 },
+    { "id": "g1", "ref": "Model/Proceso de compra", "name": "¿Aprobada?", "row": 1, "col": 2 },
+    { "id": "t3", "ref": "Model/Proceso de compra", "name": "Emitir orden de compra", "row": 1, "col": 3 },
+    { "id": "t4", "ref": "Model/Proceso de compra", "name": "Notificar rechazo", "row": 1, "col": 4 },
+
+    { "id": "sol", "ref": "Model/Proceso de compra - Modelo de datos", "name": "SolicitudCompra", "row": 2, "col": 1, "compact": true },
+    { "id": "ord", "ref": "Model/Proceso de compra - Modelo de datos", "name": "OrdenCompra", "row": 2, "col": 3, "compact": true }
+  ],
+  "connectors": [
+    { "from": "uc1", "to": "t1", "type": "Dependency", "stereotype": "trace" },
+    { "from": "uc2", "to": "t2", "type": "Dependency", "stereotype": "trace" },
+    { "from": "uc2", "to": "g1", "type": "Dependency", "stereotype": "trace" },
+    { "from": "uc3", "to": "t3", "type": "Dependency", "stereotype": "trace" },
+    { "from": "uc4", "to": "t4", "type": "Dependency", "stereotype": "trace" },
+    { "from": "sol", "to": "t1", "type": "Dependency", "stereotype": "trace", "name": "se crea en" },
+    { "from": "sol", "to": "g1", "type": "Dependency", "stereotype": "trace", "name": "aprobada" },
+    { "from": "ord", "to": "t3", "type": "Dependency", "stereotype": "trace", "name": "se crea en" }
+  ],
+  "diagram": { "name": "Trazabilidad: casos de uso y datos ↔ BPMN", "type": "Custom", "layout": "grid",
+               "cellWidth": 180, "cellHeight": 70, "gapX": 60, "gapY": 110, "hideOtherConnectors": true }
+}

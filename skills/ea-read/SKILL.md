@@ -24,6 +24,10 @@ Requiere conexión activa (`ea-connect`). **ea-cli** está definido en `ea-setup
 - `steps`: el recorrido numerado desde los eventos de inicio, con a dónde va cada paso y con qué
   condición. `unreachable` lista lo que ningún inicio alcanza: es un hallazgo de auditoría.
 
+Con `-Path <documento.md>` además lo guarda como documento: participantes, tabla del recorrido
+por responsable, decisiones con sus condiciones, mensajes y un diagrama Mermaid por carriles.
+Úsalo cuando el usuario quiera **ver** o compartir el proceso, y dile dónde quedó.
+
 Para explicarlo al usuario, cuenta el proceso por pasos y por responsable (carril), con las
 decisiones y sus condiciones. Para auditarlo, revisa además: compuertas sin nombre o sin
 condiciones en sus salidas, tareas sin tipo, caminos sin evento de fin, nodos inalcanzables,
