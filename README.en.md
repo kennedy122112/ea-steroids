@@ -240,6 +240,7 @@ Generates one spec per domain from a `schema.prisma`: classes with their fields,
 
 - [**figma-steroids**](https://github.com/kennedy122112/figma-steroids): design in Figma Desktop from your AI agent, with no API key or MCP.
 - [**bizagi-steroids**](https://github.com/kennedy122112/bizagi-steroids): describe a process and get the BPMN for Bizagi plus its Word document.
+- [**ps-steroids**](https://github.com/kennedy122112/ps-steroids): design layered graphics in Adobe Photoshop from your AI agent, starting from your idea or your photos.
 
 ## 📄 License
 
